@@ -45,8 +45,8 @@ int FeatureManager::getFeatureCount()
 
 /**
  * @brief   把特征点放入feature的list容器中，计算每一个点跟踪次数和它在次新帧和次次新帧间的视差，返回是否是关键帧
- * @param[in]   frame_count 窗口内帧的个数
- * @param[in]   image 某帧所有特征点的[camera_id,[x,y,z,u,v,vx,vy]]s构成的map,索引为feature_id
+ * @param[in]   frame_count 窗口内帧中的第几个帧
+ * @param[in]   image 某帧所有特征点的[camera_id,[x,y,z,u,v,vx,vy]]s构成的map, 第一个索引为feature_id
  * @param[in]   td IMU和cam同步时间差
  * @return  bool true：次新帧是关键帧;false：非关键帧
 */
@@ -57,25 +57,26 @@ bool FeatureManager::addFeatureCheckParallax(int frame_count, const map<int, vec
     double parallax_sum = 0;
     int parallax_num = 0;
     last_track_num = 0;
-    //把image map中的所有特征点放入feature list容器中
+    // 把image map中的所有特征点放入feature list容器中
     for (auto &id_pts : image)
     {
+        // 放入观测到这个feature的camer id，这个camera id是第一观测到特征的第一帧？还是当前camera的id?
         FeaturePerFrame f_per_fra(id_pts.second[0].second, td);
 
-        //迭代器寻找feature list中是否有这feature_id
+        // 迭代器寻找feature list中是否有这feature_id
         int feature_id = id_pts.first;
         auto it = find_if(feature.begin(), feature.end(), [feature_id](const FeaturePerId &it)
                           {
             return it.feature_id == feature_id;
                           });
 
-        //如果没有则新建一个，并添加这图像帧
+        //  如果没有则新建一个，并添加这图像帧
         if (it == feature.end())
         {
             feature.push_back(FeaturePerId(feature_id, frame_count));
             feature.back().feature_per_frame.push_back(f_per_fra);
         }
-        //有的话把图像帧添加进去
+        // 如果找到的话把观测到该feature的图像帧添加进去，
         else if (it->feature_id == feature_id)
         {
             it->feature_per_frame.push_back(f_per_fra);
@@ -87,12 +88,12 @@ bool FeatureManager::addFeatureCheckParallax(int frame_count, const map<int, vec
     if (frame_count < 2 || last_track_num < 20)
         return true;
 
-    //计算每个特征在次新帧和次次新帧中的视差
+    // 计算每个特征在次新帧和次次新帧中的视差
     for (auto &it_per_id : feature)
     {
         if (it_per_id.start_frame <= frame_count - 2 &&
             it_per_id.start_frame + int(it_per_id.feature_per_frame.size()) - 1 >= frame_count - 1)
-        {
+        {  // 之后看看这个函数？
             parallax_sum += compensatedParallax2(it_per_id, frame_count);
             parallax_num++;
         }

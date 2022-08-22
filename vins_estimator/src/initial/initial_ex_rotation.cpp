@@ -8,13 +8,13 @@ InitialEXRotation::InitialEXRotation(){
     ric = Matrix3d::Identity();
 }
 
-//标定外参的旋转矩阵
+//  标定外参的旋转矩阵，利用IMU帧间旋转和视觉之间旋转，计算出外参的旋转qcb
 bool InitialEXRotation::CalibrationExRotation(vector<pair<Vector3d, Vector3d>> corres, Quaterniond delta_q_imu, Matrix3d &calib_ric_result)
 {
     frame_count++;
-    Rc.push_back(solveRelativeR(corres));//帧间cam的R，由对极几何得到
-    Rimu.push_back(delta_q_imu.toRotationMatrix());//帧间IMU的R，由IMU预积分得到
-    Rc_g.push_back(ric.inverse() * delta_q_imu * ric);//每帧IMU相对于起始帧IMU的R
+    Rc.push_back(solveRelativeR(corres)); // 帧间cam的R，由图像的对极几何得到
+    Rimu.push_back(delta_q_imu.toRotationMatrix()); // 帧间IMU的R，由IMU预积分得到
+    Rc_g.push_back(ric.inverse() * delta_q_imu * ric); // 每帧IMU相对于起始帧IMU的R
 
     Eigen::MatrixXd A(frame_count * 4, 4);
     A.setZero();
@@ -23,7 +23,8 @@ bool InitialEXRotation::CalibrationExRotation(vector<pair<Vector3d, Vector3d>> c
     {
         Quaterniond r1(Rc[i]);
         Quaterniond r2(Rc_g[i]);
-
+        // 四元数函数angularDistance()
+        // 操作参考链接：[https://blog.csdn.net/hzwwpgmwy/article/details/84846016#1__116]
         double angular_distance = 180 / M_PI * r1.angularDistance(r2);
         ROS_DEBUG(
             "%d %f", i, angular_distance);
@@ -54,7 +55,7 @@ bool InitialEXRotation::CalibrationExRotation(vector<pair<Vector3d, Vector3d>> c
         A.block<4, 4>((i - 1) * 4, 0) = huber * (L - R);
     }
 
-    //svd分解中最小奇异值对应的右奇异向量作为旋转四元数
+    // svd分解中最小奇异值对应的右奇异向量作为旋转四元数
     JacobiSVD<MatrixXd> svd(A, ComputeFullU | ComputeFullV);
     Matrix<double, 4, 1> x = svd.matrixV().col(3);
     Quaterniond estimated_R(x);

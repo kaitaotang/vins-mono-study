@@ -32,7 +32,7 @@ std::mutex m_estimator;
 
 double latest_time;
 
-//IMU项[P,Q,B,Ba,Bg,a,g]
+//IMU项[P,Q,B,Ba,Bg,a,g]，只有旋转用四元数，其余全部都是用Eigen::Vector3d
 Eigen::Vector3d tmp_P;
 Eigen::Quaterniond tmp_Q;
 Eigen::Vector3d tmp_V;
@@ -44,7 +44,7 @@ bool init_feature = 0;
 bool init_imu = 1;
 double last_imu_t = 0;
 
-//从IMU测量值imu_msg和上一个PVQ递推得到下一个tmp_Q，tmp_P，tmp_V，中值积分
+//从IMU测量值imu_msg和上一个PVQ(状态量)递推得到下一个tmp_Q，tmp_P，tmp_V，中值积分
 void predict(const sensor_msgs::ImuConstPtr &imu_msg)
 {
     double t = imu_msg->header.stamp.toSec();
@@ -69,7 +69,7 @@ void predict(const sensor_msgs::ImuConstPtr &imu_msg)
     double ry = imu_msg->angular_velocity.y;
     double rz = imu_msg->angular_velocity.z;
     Eigen::Vector3d angular_velocity{rx, ry, rz};
-
+    // 实验看看estimator.g的值是正还是负？
     Eigen::Vector3d un_acc_0 = tmp_Q * (acc_0 - tmp_Ba) - estimator.g;
 
     Eigen::Vector3d un_gyr = 0.5 * (gyr_0 + angular_velocity) - tmp_Bg;
@@ -123,7 +123,8 @@ getMeasurements()
         if (imu_buf.empty() || feature_buf.empty())
             return measurements;
 
-        //对齐标准：IMU最后一个数据的时间要大于第一个图像特征数据的时间
+        // 对齐标准：IMU最后一个数据的时间要大于第一个图像特征数据的时间
+        // 如果IMU最后一个数据的时间小于第一个图像特征的时间，返回空，要继续等待IMu数据
         if (!(imu_buf.back()->header.stamp.toSec() > feature_buf.front()->header.stamp.toSec() + estimator.td))
         {
             //ROS_WARN("wait for imu, only should happen at the beginning");
@@ -131,7 +132,8 @@ getMeasurements()
             return measurements;
         }
 
-        //对齐标准：IMU第一个数据的时间要小于第一个图像特征数据的时间
+        // 对齐标准：IMU第一个数据的时间要小于第一个图像特征数据的时间
+        // 如果IMU第一个数据的时间 大于 第一个图像特征数据的时间，则丢且图像。保证提取出小于图像时间戳的IMU数据
         if (!(imu_buf.front()->header.stamp.toSec() < feature_buf.front()->header.stamp.toSec() + estimator.td))
         {
             ROS_WARN("throw img, only should happen at the beginning");
@@ -190,7 +192,7 @@ void imu_callback(const sensor_msgs::ImuConstPtr &imu_msg)
         std_msgs::Header header = imu_msg->header;
         header.frame_id = "world";
 
-        //发布最新的由IMU直接递推得到的PQV
+        //当Estimator::SolverFlag::NON_LINEAR状态时，发布最新的由IMU直接递推得到的PQV
         if (estimator.solver_flag == Estimator::SolverFlag::NON_LINEAR)
             pubLatestOdometry(tmp_P, tmp_Q, tmp_V, header);
     }
@@ -263,8 +265,11 @@ void process()
         
         std::unique_lock<std::mutex> lk(m_buf);
 
-        //等待上面两个接收数据完成就会被唤醒
-        //在提取measurements时互斥锁m_buf会锁住，此时无法接收数据
+        // 等待上面两个接收数据完成就会被唤醒
+        // 在提取measurements时互斥锁m_buf会锁住，此时无法接收数据
+        // wait 导致当前线程阻塞直至条件变量被通知，或虚假唤醒发生，可选地循环直至满足某谓词（measurements不为空）。
+        // measurements 保存了上一帧图像时间在当前帧图像时间中间的imu数据 和 当前帧图像数据。
+        // estimator.td(time diff)是IMU和Image的时间同步参数，可作为优化变量
         con.wait(lk, [&]
                  {
             return (measurements = getMeasurements()).size() != 0;
@@ -282,7 +287,8 @@ void process()
                 double t = imu_msg->header.stamp.toSec();
                 double img_t = img_msg->header.stamp.toSec() + estimator.td;
 
-                //发送IMU数据进行预积分
+                // 发送IMU数据进行预积分
+                // current_time是imu的时间
                 if (t <= img_t)
                 { 
                     if (current_time < 0)
@@ -296,11 +302,11 @@ void process()
                     rx = imu_msg->angular_velocity.x;
                     ry = imu_msg->angular_velocity.y;
                     rz = imu_msg->angular_velocity.z;
-                    //imu预积分
+                    // imu预积分，传入一帧IMU数据
                     estimator.processIMU(dt, Vector3d(dx, dy, dz), Vector3d(rx, ry, rz));
                     //printf("imu: dt:%f a: %f %f %f w: %f %f %f\n",dt, dx, dy, dz, rx, ry, rz);
 
-                }
+                } // 当IMU数据时间戳大于image时间戳时，意思是上一帧IMU数据时间戳小于image，对上一帧时间戳到image时间戳进行线性化
                 else
                 {
                     double dt_1 = img_t - current_time;
@@ -325,13 +331,13 @@ void process()
             // set relocalization frame
             sensor_msgs::PointCloudConstPtr relo_msg = NULL;
             
-            //取出最后一个重定位帧
+            // 取出最后一个重定位帧
             while (!relo_buf.empty())
             {
                 relo_msg = relo_buf.front();
                 relo_buf.pop();
             }
-
+            // 开启重定位算法
             if (relo_msg != NULL)
             {
                 vector<Vector3d> match_points;
@@ -344,6 +350,7 @@ void process()
                     u_v_id.z() = relo_msg->points[i].z;
                     match_points.push_back(u_v_id);
                 }
+                // 重定位帧的推位的平移和旋转
                 Vector3d relo_t(relo_msg->channels[0].values[0], relo_msg->channels[0].values[1], relo_msg->channels[0].values[2]);
                 Quaterniond relo_q(relo_msg->channels[0].values[3], relo_msg->channels[0].values[4], relo_msg->channels[0].values[5], relo_msg->channels[0].values[6]);
                 Matrix3d relo_r = relo_q.toRotationMatrix();
@@ -357,7 +364,8 @@ void process()
 
             TicToc t_s;
 
-            //建立每个特征点的(camera_id,[x,y,z,u,v,vx,vy])s的map，索引为feature_id
+            // 建立每个特征点的(camera_id,[x,y,z,u,v,vx,vy])s的map，索引为feature_id
+            // 这里的x，y，z应该是在相机归一化平面的坐标
             map<int, vector<pair<int, Eigen::Matrix<double, 7, 1>>>> image;
             for (unsigned int i = 0; i < img_msg->points.size(); i++)
             {
@@ -377,10 +385,11 @@ void process()
                 image[feature_id].emplace_back(camera_id,  xyz_uv_velocity);
             }
             
-            //处理图像特征
+            // 处理图像特征 第二个参数头信息是什么？
             estimator.processImage(image, img_msg->header);
 
             double whole_t = t_s.toc();
+            // 将外参和time diff打印出来
             printStatistics(estimator, whole_t);
             std_msgs::Header header = img_msg->header;
             header.frame_id = "world";

@@ -222,7 +222,7 @@ class IntegrationBase
     Eigen::Matrix<double, 18, 18> noise;
 
     double sum_dt;
-    //预积分值
+    //  预积分值
     Eigen::Vector3d delta_p;
     Eigen::Quaterniond delta_q;
     Eigen::Vector3d delta_v;
