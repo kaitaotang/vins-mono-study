@@ -14,9 +14,9 @@ using namespace std;
 
 struct SFMFeature
 {
-    bool state;//特征点的状态（是否被三角化）
+    bool state; // 特征点的状态（是否被三角化）
     int id;//
-    vector<pair<int,Vector2d>> observation;//所有观测到该特征点的图像帧ID和图像坐标
+    vector<pair<int,Vector2d>> observation; // 所有观测到该特征点的图像帧ID和图像坐标
     double position[3];//3d坐标
     double depth;//深度
 };
@@ -28,6 +28,7 @@ struct ReprojectionError3D
 		{}
 
 	template <typename T>
+	// 重投影误差公式，参数顺序和AutoDiffCostFunction里不同，把残差项放到了最后
 	bool operator()(const T* const camera_R, const T* const camera_T, const T* point, T* residuals) const
 	{
 		T p[3];
@@ -42,7 +43,7 @@ struct ReprojectionError3D
 
 	static ceres::CostFunction* Create(const double observed_x,
 	                                   const double observed_y) 
-	{
+	{ // 仿函数，残差维度，依次的参数维度 
 	  return (new ceres::AutoDiffCostFunction<
 	          ReprojectionError3D, 2, 4, 3, 3>(
 	          	new ReprojectionError3D(observed_x,observed_y)));

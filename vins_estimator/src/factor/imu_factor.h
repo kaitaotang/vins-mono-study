@@ -8,7 +8,7 @@
 #include "integration_base.h"
 
 #include <ceres/ceres.h>
-
+// number of residuals, size of first parameter
 class IMUFactor : public ceres::SizedCostFunction<15, 7, 9, 7, 9>
 {
   public:

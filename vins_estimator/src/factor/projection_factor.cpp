@@ -31,18 +31,18 @@ bool ProjectionFactor::Evaluate(double const *const *parameters, double *residua
     Eigen::Quaterniond qic(parameters[2][6], parameters[2][3], parameters[2][4], parameters[2][5]);
 
 
-    //pts_i 是i时刻归一化相机坐标系下的3D坐标
-    //第i帧相机坐标系下的的逆深度
+    // pts_i 是i时刻归一化相机坐标系下的3D坐标
+    // 第i帧相机坐标系下的的逆深度，3？还是2？
     double inv_dep_i = parameters[3][0];
-    //第i帧相机坐标系下的3D坐标
+    // 第i帧相机坐标系下的3D坐标
     Eigen::Vector3d pts_camera_i = pts_i / inv_dep_i;
-    //第i帧IMU坐标系下的3D坐标
+    // 第i帧IMU坐标系下的3D坐标
     Eigen::Vector3d pts_imu_i = qic * pts_camera_i + tic;
-    //世界坐标系下的3D坐标
+    // 世界坐标系下的3D坐标
     Eigen::Vector3d pts_w = Qi * pts_imu_i + Pi;
-    //第j帧imu坐标系下的3D坐标
+    // 第j帧imu坐标系下的3D坐标
     Eigen::Vector3d pts_imu_j = Qj.inverse() * (pts_w - Pj);
-    //第j帧相机坐标系下的3D坐标
+    // 第j帧相机坐标系下的3D坐标
     Eigen::Vector3d pts_camera_j = qic.inverse() * (pts_imu_j - tic);
     Eigen::Map<Eigen::Vector2d> residual(residuals);
 
@@ -58,7 +58,7 @@ bool ProjectionFactor::Evaluate(double const *const *parameters, double *residua
 
     residual = sqrt_info * residual;
 
-    //reduce 表示残差residual对fci（pts_camera_j）的导数，同样根据不同的相机模型
+    // reduce 表示残差residual对fci（pts_camera_j）的导数，同样根据不同的相机模型
     if (jacobians)
     {
         Eigen::Matrix3d Ri = Qi.toRotationMatrix();
@@ -76,7 +76,7 @@ bool ProjectionFactor::Evaluate(double const *const *parameters, double *residua
                      - x1 * x2 / pow(norm, 3),            1.0 / norm - x2 * x2 / pow(norm, 3), - x2 * x3 / pow(norm, 3),
                      - x1 * x3 / pow(norm, 3),            - x2 * x3 / pow(norm, 3),            1.0 / norm - x3 * x3 / pow(norm, 3);
         reduce = tangent_base * norm_jaco;
-#else//针孔相机模型
+#else // 针孔相机模型
         reduce << 1. / dep_j, 0, -pts_camera_j(0) / (dep_j * dep_j),
             0, 1. / dep_j, -pts_camera_j(1) / (dep_j * dep_j);
 #endif
@@ -86,6 +86,7 @@ bool ProjectionFactor::Evaluate(double const *const *parameters, double *residua
         // 残差项的Jacobian
         // 先求fci对各项的Jacobian，然后用链式法则乘起来
         // 对第i帧的位姿 pbi,qbi      2X7的矩阵 最后一项是0
+        // 视觉重投影误差求导，看下应该是对delta kesai求导？
         if (jacobians[0]) 
         {
             Eigen::Map<Eigen::Matrix<double, 2, 7, Eigen::RowMajor>> jacobian_pose_i(jacobians[0]);

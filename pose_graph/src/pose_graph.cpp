@@ -25,7 +25,7 @@ PoseGraph::~PoseGraph()
 	t_optimization.join();
 }
 
-//发布轨迹的topic
+// 发布轨迹的topic
 void PoseGraph::registerPub(ros::NodeHandle &n)
 {
     pub_pg_path = n.advertise<nav_msgs::Path>("pose_graph_path", 1000);
@@ -35,7 +35,7 @@ void PoseGraph::registerPub(ros::NodeHandle &n)
         pub_path[i] = n.advertise<nav_msgs::Path>("path_" + to_string(i), 1000);
 }
 
-//加载Brief字典
+// 加载Brief字典
 void PoseGraph::loadVocabulary(std::string voc_path)
 {
     voc = new BriefVocabulary(voc_path);

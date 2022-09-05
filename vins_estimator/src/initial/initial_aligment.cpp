@@ -3,7 +3,7 @@
 /**
  * @brief   陀螺仪偏置校正
  * @optional    根据视觉SFM的结果来校正陀螺仪Bias -> Paper V-B-1
- *              主要是将相邻帧之间SFM求解出来的旋转矩阵与IMU预积分的旋转量对齐
+ *              主要是将相邻帧之间SFM求解出来的旋转矩阵与IMU预积分的 旋转量 对齐
  *              注意得到了新的Bias后对应的预积分需要repropagate
  * @param[in]   all_image_frame所有图像帧构成的map,图像帧保存了位姿、预积分量和关于角点的信息
  * @param[out]  Bgs 陀螺仪偏置
@@ -38,7 +38,7 @@ void solveGyroscopeBias(map<double, ImageFrame> &all_image_frame, Vector3d* Bgs)
         b += tmp_A.transpose() * tmp_b;
 
     }
-    //LDLT方法
+    // LDLT方法,得到了陀螺有bias的增量
     delta_bg = A.ldlt().solve(b);
     ROS_WARN_STREAM("gyroscope bias initial calibration " << delta_bg.transpose());
 
@@ -133,7 +133,7 @@ void RefineGravity(map<double, ImageFrame> &all_image_frame, Vector3d &g, Vector
 
             MatrixXd r_A = tmp_A.transpose() * cov_inv * tmp_A;
             VectorXd r_b = tmp_A.transpose() * cov_inv * tmp_b;
-
+            // 把多帧的AX=B中的A进行构造。
             A.block<6, 6>(i * 3, i * 3) += r_A.topLeftCorner<6, 6>();
             b.segment<6>(i * 3) += r_b.head<6>();
 
@@ -148,7 +148,7 @@ void RefineGravity(map<double, ImageFrame> &all_image_frame, Vector3d &g, Vector
             x = A.ldlt().solve(b);
             //dg = [w1,w2]^T
             VectorXd dg = x.segment<2>(n_state - 3);
-            g0 = (g0 + lxly * dg).normalized() * G.norm();
+            g0 = (g0 + lxly * dg).normalized() * G.norm(); // 重力的模长永远都是设定的值，比如9.8
             //double s = x(n_state - 1);
     }   
     g = g0;
@@ -167,7 +167,7 @@ void RefineGravity(map<double, ImageFrame> &all_image_frame, Vector3d &g, Vector
 bool LinearAlignment(map<double, ImageFrame> &all_image_frame, Vector3d &g, VectorXd &x)
 {
     int all_frame_count = all_image_frame.size();
-    //优化量x的总维度
+    // 优化量x的总维度
     int n_state = all_frame_count * 3 + 3 + 1;
 
     MatrixXd A{n_state, n_state};
@@ -221,14 +221,14 @@ bool LinearAlignment(map<double, ImageFrame> &all_image_frame, Vector3d &g, Vect
         A.block<6, 4>(i * 3, n_state - 4) += r_A.topRightCorner<6, 4>();
         A.block<4, 6>(n_state - 4, i * 3) += r_A.bottomLeftCorner<4, 6>();
     }
-    A = A * 1000.0;
+    A = A * 1000.0; // 乘1000？增强数值稳定性
     b = b * 1000.0;
     x = A.ldlt().solve(b);
 
     double s = x(n_state - 1) / 100.0;
     ROS_DEBUG("estimated scale: %f", s);
 
-    g = x.segment<3>(n_state - 4);
+    g = x.segment<3>(n_state - 4); // 3维 
     ROS_DEBUG_STREAM(" result g     " << g.norm() << " " << g.transpose());
     
     if(fabs(g.norm() - G.norm()) > 1.0 || s < 0)
@@ -236,7 +236,7 @@ bool LinearAlignment(map<double, ImageFrame> &all_image_frame, Vector3d &g, Vect
         return false;
     }
 
-    //重力细化
+    // 重力细化
     RefineGravity(all_image_frame, g, x);
     
     s = (x.tail<1>())(0) / 100.0;
@@ -252,9 +252,9 @@ bool LinearAlignment(map<double, ImageFrame> &all_image_frame, Vector3d &g, Vect
 //视觉和IMU对齐
 bool VisualIMUAlignment(map<double, ImageFrame> &all_image_frame, Vector3d* Bgs, Vector3d &g, VectorXd &x)
 {
-    solveGyroscopeBias(all_image_frame, Bgs);//计算陀螺仪偏置
+    solveGyroscopeBias(all_image_frame, Bgs); // 计算陀螺仪偏置
 
-    if(LinearAlignment(all_image_frame, g, x))//计算尺度，重力加速度和速度
+    if(LinearAlignment(all_image_frame, g, x)) //计算尺度，重力加速度和速度
         return true;
     else 
         return false;

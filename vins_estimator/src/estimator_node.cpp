@@ -192,7 +192,8 @@ void imu_callback(const sensor_msgs::ImuConstPtr &imu_msg)
         std_msgs::Header header = imu_msg->header;
         header.frame_id = "world";
 
-        //当Estimator::SolverFlag::NON_LINEAR状态时，发布最新的由IMU直接递推得到的PQV
+        // 当Estimator::SolverFlag::NON_LINEAR状态时，发布最新的由IMU直接递推得到的PQV
+        // 这样才能保证高速输出，保证在图像数据还没有到来时，以IMU频率发布位姿
         if (estimator.solver_flag == Estimator::SolverFlag::NON_LINEAR)
             pubLatestOdometry(tmp_P, tmp_Q, tmp_V, header);
     }
@@ -268,7 +269,7 @@ void process()
         // 等待上面两个接收数据完成就会被唤醒
         // 在提取measurements时互斥锁m_buf会锁住，此时无法接收数据
         // wait 导致当前线程阻塞直至条件变量被通知，或虚假唤醒发生，可选地循环直至满足某谓词（measurements不为空）。
-        // measurements 保存了上一帧图像时间在当前帧图像时间中间的imu数据 和 当前帧图像数据。
+        // measurements 保存了上一帧图像时间与当前帧图像时间的 中间的imu数据 和 当前帧图像数据！！！这种数据组作为一个处理单元！！
         // estimator.td(time diff)是IMU和Image的时间同步参数，可作为优化变量
         con.wait(lk, [&]
                  {
@@ -370,7 +371,7 @@ void process()
             for (unsigned int i = 0; i < img_msg->points.size(); i++)
             {
                 int v = img_msg->channels[0].values[i] + 0.5;
-                int feature_id = v / NUM_OF_CAM;
+                int feature_id = v / NUM_OF_CAM; // feature_id， camera_id 什么意思？
                 int camera_id = v % NUM_OF_CAM;
                 double x = img_msg->points[i].x;
                 double y = img_msg->points[i].y;
@@ -419,12 +420,12 @@ void process()
 
 int main(int argc, char **argv)
 {
-    //ROS初始化，设置句柄n
+    // ROS初始化，设置句柄n
     ros::init(argc, argv, "vins_estimator");
     ros::NodeHandle n("~");
     ros::console::set_logger_level(ROSCONSOLE_DEFAULT_NAME, ros::console::levels::Info);
     
-    //读取参数，设置估计器参数
+    // 读取参数，设置估计器参数
     readParameters(n);
     estimator.setParameter();
 
@@ -433,16 +434,16 @@ int main(int argc, char **argv)
 #endif
     ROS_WARN("waiting for image and imu...");
 
-    //用于RVIZ显示的Topic
+    // 用于RVIZ显示的Topic
     registerPub(n);
 
-    //订阅IMU、feature、restart、match_points的topic,执行各自回调函数
+    // 订阅IMU、feature、restart、match_points的topic,执行各自回调函数
     ros::Subscriber sub_imu = n.subscribe(IMU_TOPIC, 2000, imu_callback, ros::TransportHints().tcpNoDelay());
     ros::Subscriber sub_image = n.subscribe("/feature_tracker/feature", 2000, feature_callback);
     ros::Subscriber sub_restart = n.subscribe("/feature_tracker/restart", 2000, restart_callback);
     ros::Subscriber sub_relo_points = n.subscribe("/pose_graph/match_points", 2000, relocalization_callback);
 
-    //创建VIO主线程
+    // 创建VIO主线程
     std::thread measurement_process{process};
     ros::spin();
 
