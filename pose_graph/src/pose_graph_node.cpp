@@ -24,9 +24,9 @@
 #define SKIP_FIRST_CNT 10
 using namespace std;
 
-queue<sensor_msgs::ImageConstPtr> image_buf;//原始图像数据
-queue<sensor_msgs::PointCloudConstPtr> point_buf;//世界坐标系下的地图点云
-queue<nav_msgs::Odometry::ConstPtr> pose_buf;//当前帧的 pose
+queue<sensor_msgs::ImageConstPtr> image_buf; // 原始图像数据
+queue<sensor_msgs::PointCloudConstPtr> point_buf; // 世界坐标系下的地图点云
+queue<nav_msgs::Odometry::ConstPtr> pose_buf; // 当前帧的 pose
 queue<Eigen::Vector3d> odometry_buf;
 
 
@@ -34,7 +34,7 @@ std::mutex m_buf;
 std::mutex m_process;
 int frame_index  = 0;
 int sequence = 1;
-//构建位姿图优化类
+// 构建位姿图优化类
 PoseGraph posegraph;
 
 int skip_first_cnt = 0;
@@ -70,7 +70,7 @@ CameraPoseVisualization cameraposevisual(1, 0, 0, 1);
 Eigen::Vector3d last_t(-100, -100, -100);
 double last_image_time = -1;
 
-//开始一个新的图像序列（地图合并功能）
+// 开始一个新的图像序列（地图合并功能）
 void new_sequence()
 {
     printf("new sequence\n");
@@ -81,7 +81,7 @@ void new_sequence()
         ROS_WARN("only support 5 sequences since it's boring to copy code for more sequences.");
         ROS_BREAK();
     }
-    //重新初始化，重新构建地图。
+    // 重新初始化，重新构建地图。
     posegraph.posegraph_visualization->reset();
     posegraph.publish();
     m_buf.lock();
@@ -161,7 +161,7 @@ void pose_callback(const nav_msgs::Odometry::ConstPtr &pose_msg)
     */
 }
 
-//imu前向递推的回调函数，从IMU预积分的位姿得到IMU位姿和cam位姿，得到低延迟和高频率结果
+// imu前向递推的回调函数，从IMU预积分的位姿得到IMU位姿和cam位姿，得到低延迟和高频率结果
 void imu_forward_callback(const nav_msgs::Odometry::ConstPtr &forward_msg)
 {
     if (VISUALIZE_IMU_FORWARD)
@@ -175,7 +175,7 @@ void imu_forward_callback(const nav_msgs::Odometry::ConstPtr &forward_msg)
 
         vio_t = posegraph.w_r_vio * vio_t + posegraph.w_t_vio;
         vio_q = posegraph.w_r_vio *  vio_q;
-
+        
         vio_t = posegraph.r_drift * vio_t + posegraph.t_drift;
         vio_q = posegraph.r_drift * vio_q;
 
@@ -191,7 +191,7 @@ void imu_forward_callback(const nav_msgs::Odometry::ConstPtr &forward_msg)
     }
 }
 
-//重定位回调函数，将重定位帧的相对位姿放入loop_info，updateKeyFrameLoop()进行回环更新
+// 重定位回调函数，将重定位帧的相对位姿放入loop_info，updateKeyFrameLoop()进行回环更新
 void relo_relative_pose_callback(const nav_msgs::Odometry::ConstPtr &pose_msg)
 {
     Vector3d relative_t = Vector3d(pose_msg->pose.pose.position.x,
@@ -213,7 +213,7 @@ void relo_relative_pose_callback(const nav_msgs::Odometry::ConstPtr &pose_msg)
 
 }
 
-//VIO回调函数，根据pose_msg中的位姿得到IMU位姿和cam位姿
+// VIO回调函数，根据pose_msg中的位姿得到IMU位姿和cam位姿
 void vio_callback(const nav_msgs::Odometry::ConstPtr &pose_msg)
 {
     //ROS_INFO("vio_callback!");
@@ -308,7 +308,7 @@ void extrinsic_callback(const nav_msgs::Odometry::ConstPtr &pose_msg)
     m_process.unlock();
 }
 
-//主线程
+// 主线程
 void process()
 {
     if (!LOOP_CLOSURE)
@@ -320,7 +320,7 @@ void process()
         nav_msgs::Odometry::ConstPtr pose_msg = NULL;
 
         // find out the messages with same time stamp
-        //得到具有相同时间戳的pose_msg、image_msg、point_msg
+        // 得到具有相同时间戳的pose_msg、image_msg、point_msg
         m_buf.lock();
         if(!image_buf.empty() && !point_buf.empty() && !pose_buf.empty())
         {
@@ -333,7 +333,7 @@ void process()
             {
                 point_buf.pop();
                 printf("throw point at beginning\n");
-            }
+            } // 当image_buf，point_buf时间戳大于pose_buf时间戳时
             else if (image_buf.back()->header.stamp.toSec() >= pose_buf.front()->header.stamp.toSec() 
                 && point_buf.back()->header.stamp.toSec() >= pose_buf.front()->header.stamp.toSec())
             {
@@ -361,14 +361,14 @@ void process()
             //printf(" image time %f \n", image_msg->header.stamp.toSec());
             
             // skip first few
-            //剔除最开始的SKIP_FIRST_CNT帧
+            // 剔除最开始的SKIP_FIRST_CNT帧
             if (skip_first_cnt < SKIP_FIRST_CNT)
             {
                 skip_first_cnt++;
                 continue;
             }
 
-            //每隔SKIP_CNT帧进行一次  SKIP_CNT=0
+            // 每隔SKIP_CNT帧进行一次  SKIP_CNT=0
             if (skip_cnt < SKIP_CNT)
             {
                 skip_cnt++;
@@ -406,7 +406,7 @@ void process()
                                      pose_msg->pose.pose.orientation.y,
                                      pose_msg->pose.pose.orientation.z).toRotationMatrix();
             
-            //将距上一关键帧距离（平移向量的模）超过SKIP_DIS的图像创建为关键帧
+            // 将距上一关键帧距离（平移向量的模）超过SKIP_DIS的图像创建为关键帧
             if((T - last_t).norm() > SKIP_DIS)
             {
                 vector<cv::Point3f> point_3d; 
@@ -442,7 +442,7 @@ void process()
 
                 start_flag = 1;
 
-                //在posegraph中添加关键帧，flag_detect_loop=1回环检测
+                // 在posegraph中添加关键帧，flag_detect_loop=1回环检测
                 posegraph.addKeyFrame(keyframe, 1);
                 m_process.unlock();
                 frame_index++;
@@ -450,7 +450,7 @@ void process()
             }
         }
 
-        //休眠5ms
+        // 休眠5ms
         std::chrono::milliseconds dura(5);
         std::this_thread::sleep_for(dura);
     }
@@ -462,7 +462,7 @@ void command()
         return;
     while(1)
     {
-        //按s保存位姿图并关闭程序
+        // 按s保存位姿图并关闭程序
         char c = getchar();
         if (c == 's')
         {
@@ -473,7 +473,7 @@ void command()
             printf("program shutting down...\n");
             ros::shutdown();
         }
-        //按n开始一个新的图像序列
+        // 按n开始一个新的图像序列
         if (c == 'n')
             new_sequence();
 
@@ -484,12 +484,12 @@ void command()
 
 int main(int argc, char **argv)
 {
-    //ROS初始化
+    // ROS初始化
     ros::init(argc, argv, "pose_graph");
     ros::NodeHandle n("~");
     posegraph.registerPub(n);
 
-    //读取参数
+    // 读取参数
     n.getParam("visualization_shift_x", VISUALIZATION_SHIFT_X);
     n.getParam("visualization_shift_y", VISUALIZATION_SHIFT_Y);
     n.getParam("skip_cnt", SKIP_CNT);
@@ -508,19 +508,19 @@ int main(int argc, char **argv)
     std::string IMAGE_TOPIC;
     int LOAD_PREVIOUS_POSE_GRAPH;
 
-    //如果需要进行回环
+    // 如果需要进行回环
     if (LOOP_CLOSURE)
     {
         ROW = fsSettings["image_height"];
         COL = fsSettings["image_width"];
 
-        //读取字典
+        // 读取字典
         std::string pkg_path = ros::package::getPath("pose_graph");
         string vocabulary_file = pkg_path + "/../support_files/brief_k10L6.bin";
         cout << "vocabulary_file" << vocabulary_file << endl;
         posegraph.loadVocabulary(vocabulary_file);
 
-        //读取BRIEF描述子的模板文件
+        // 读取BRIEF描述子的模板文件
         BRIEF_PATTERN_FILE = pkg_path + "/../support_files/brief_pattern.yml";
         cout << "BRIEF_PATTERN_FILE" << BRIEF_PATTERN_FILE << endl;
         m_camera = camodocal::CameraFactory::instance()->generateCameraFromYamlFile(config_file.c_str());
@@ -537,7 +537,7 @@ int main(int argc, char **argv)
         fout.close();
         fsSettings.release();
 
-        //加载先前的位姿图
+        // 加载先前的位姿图
         if (LOAD_PREVIOUS_POSE_GRAPH)
         {
             printf("load pose graph\n");
@@ -556,7 +556,7 @@ int main(int argc, char **argv)
 
     fsSettings.release();
 
-    //订阅topic并执行各自回调函数
+    // 订阅topic并执行各自回调函数
     ros::Subscriber sub_imu_forward = n.subscribe("/vins_estimator/imu_propagate", 2000, imu_forward_callback);
     ros::Subscriber sub_vio = n.subscribe("/vins_estimator/odometry", 2000, vio_callback);
     ros::Subscriber sub_image = n.subscribe(IMAGE_TOPIC, 2000, image_callback);
@@ -565,7 +565,7 @@ int main(int argc, char **argv)
     ros::Subscriber sub_point = n.subscribe("/vins_estimator/keyframe_point", 2000, point_callback);
     ros::Subscriber sub_relo_relative_pose = n.subscribe("/vins_estimator/relo_relative_pose", 2000, relo_relative_pose_callback);
 
-    //发布的topic
+    // 发布的topic
     pub_match_img = n.advertise<sensor_msgs::Image>("match_image", 1000);
     pub_camera_pose_visual = n.advertise<visualization_msgs::MarkerArray>("camera_pose_visual", 1000);
     pub_key_odometrys = n.advertise<visualization_msgs::Marker>("key_odometrys", 1000);
@@ -575,10 +575,10 @@ int main(int argc, char **argv)
     std::thread measurement_process;
     std::thread keyboard_command_process;
 
-    //pose graph主线程
+    // pose graph主线程
     measurement_process = std::thread(process);
 
-    //键盘操作的线程
+    // 键盘操作的线程
     keyboard_command_process = std::thread(command);
 
     ros::spin();

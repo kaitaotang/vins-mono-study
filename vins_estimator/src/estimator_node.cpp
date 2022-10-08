@@ -165,10 +165,10 @@ getMeasurements()
     return measurements;
 }
 
-//imu回调函数，将imu_msg保存到imu_buf，IMU状态递推并发布[P,Q,V,header]
+// imu回调函数，将imu_msg保存到imu_buf，IMU状态递推并发布[P,Q,V,header]
 void imu_callback(const sensor_msgs::ImuConstPtr &imu_msg)
 {
-    //判断时间间隔是否为正
+    // 判断时间间隔是否为正
     if (imu_msg->header.stamp.toSec() <= last_imu_t)
     {
         //ROS_WARN("imu message ins disorder!");
@@ -181,14 +181,14 @@ void imu_callback(const sensor_msgs::ImuConstPtr &imu_msg)
     imu_buf.push(imu_msg);
     m_buf.unlock();
 
-    con.notify_one();//唤醒作用于process线程中的获取观测值数据的函数
+    con.notify_one(); // 唤醒作用于process线程中的获取观测值数据的函数
 
     last_imu_t = imu_msg->header.stamp.toSec();
 
     {
-        //构造互斥锁m_state，析构时解锁
+        // 构造互斥锁m_state，析构时解锁
         std::lock_guard<std::mutex> lg(m_state);
-        predict(imu_msg);//递推得到IMU的PQV
+        predict(imu_msg); // 递推得到IMU的PQV
         std_msgs::Header header = imu_msg->header;
         header.frame_id = "world";
 
@@ -199,7 +199,7 @@ void imu_callback(const sensor_msgs::ImuConstPtr &imu_msg)
     }
 }
 
-//feature回调函数，将feature_msg放入feature_buf     
+// feature回调函数，将feature_msg放入feature_buf     
 void feature_callback(const sensor_msgs::PointCloudConstPtr &feature_msg)
 {
     if (!init_feature)
@@ -216,7 +216,7 @@ void feature_callback(const sensor_msgs::PointCloudConstPtr &feature_msg)
     con.notify_one();
 }
 
-//restart回调函数，收到restart时清空feature_buf和imu_buf，估计器重置，时间重置
+// restart回调函数，收到restart时清空feature_buf和imu_buf，估计器重置，时间重置
 void restart_callback(const std_msgs::BoolConstPtr &restart_msg)
 {
     if (restart_msg->data == true)

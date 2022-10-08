@@ -259,7 +259,7 @@ bool GlobalSFM::construct(int frame_num, Quaterniond* q, Vector3d* T, int l,
 	}
 */
 
-	// 6、使用ceres进行全局BA优化
+	// 6、使用ceres进行全局BA优化,只优化帧的旋转和平移，没有优化点的坐标
 	ceres::Problem problem;
 	ceres::LocalParameterization* local_parameterization = new ceres::QuaternionParameterization();
 	//cout << " begin full BA " << endl;
@@ -299,7 +299,7 @@ bool GlobalSFM::construct(int frame_num, Quaterniond* q, Vector3d* T, int l,
 												sfm_f[i].observation[j].second.y());
             // 参数顺序和自动求导里的4，3，3一致
     		problem.AddResidualBlock(cost_function, NULL, c_rotation[l], c_translation[l], 
-    								sfm_f[i].position);	 
+    								sfm_f[i].position);
 		}
 
 	}

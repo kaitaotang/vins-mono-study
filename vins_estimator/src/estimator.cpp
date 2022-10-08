@@ -158,7 +158,7 @@ void Estimator::processImage(const map<int, vector<pair<int, Eigen::Matrix<doubl
     // 将图像数据、时间、临时预积分值存到图像帧调用类中
     ImageFrame imageframe(image, header.stamp.toSec());
     imageframe.pre_integration = tmp_pre_integration; // 已经存储了图像两帧之间的imu预积分结果，因为node里是先调用processImu结束后，再调用processimage
-    
+    // all_image_frame存储了所有图像帧，包括关键帧，非关键帧
     all_image_frame.insert(make_pair(header.stamp.toSec(), imageframe));
     
     // 更新临时预积分初始值
@@ -286,7 +286,7 @@ bool Estimator::initialStructure()
             var += (tmp_g - aver_g).transpose() * (tmp_g - aver_g);
             //cout << "frame g " << tmp_g.transpose() << endl;
         }
-        var = sqrt(var / ((int)all_image_frame.size() - 1));  // 加速度标准差
+        var = sqrt(var / ((int)all_image_frame.size() - 1)); // 加速度标准差
         //ROS_WARN("IMU variation %f!", var);
         
         if(var < 0.25)
@@ -332,18 +332,20 @@ bool Estimator::initialStructure()
 
     // 对窗口中每个图像帧求解sfm问题
     // 得到所有图像帧相对于参考帧的姿态四元数Q、平移向量T和特征点坐标sfm_tracked_points。
+    // 因为进行了滑窗优化，图像帧的位姿变了，所以sfm的三维点坐标也就不准了
     GlobalSFM sfm;
     if(!sfm.construct(frame_count + 1, Q, T, l,
               relative_R, relative_T,
               sfm_f, sfm_tracked_points))
     {
-        //求解失败则边缘化最早一帧并滑动窗口
+        // 求解失败则边缘化最早一帧并滑动窗口
         ROS_DEBUG("global SFM failed!");
         marginalization_flag = MARGIN_OLD;
         return false;
     }
 
     // 对于所有的图像帧，包括不在滑动窗口中的，提供初始的RT估计，然后solvePnP进行优化,得到每一帧的姿态
+    // 后面for循环，貌似只执行了一部分
     map<double, ImageFrame>::iterator frame_it;
     map<int, Vector3d>::iterator it;
     frame_it = all_image_frame.begin();
@@ -394,7 +396,7 @@ bool Estimator::initialStructure()
                 }
             }
         }
-        //保证特征点数大于5
+        // 保证特征点数大于5
         cv::Mat K = (cv::Mat_<double>(3, 3) << 1, 0, 0, 0, 1, 0, 0, 0, 1);     
         if(pts_3_vector.size() < 6)
         {
@@ -478,7 +480,8 @@ bool Estimator::visualInitialAlign()
         dep[i] = -1;
     f_manager.clearDepth(dep);
 
-    // 重新计算特征点的深度，为什么？因为滑窗内已经BA过了，为什么要改特征的深度？
+    // 重新计算特征点的深度，为什么？滑窗内已经BA过了，为什么要改特征的深度？
+    // 因为BA只调整了图像帧位姿，三维坐标不准了，并且深度要和特征对应，所以重新计算
     Vector3d TIC_TMP[NUM_OF_CAM];
     for(int i = 0; i < NUM_OF_CAM; i++)
         TIC_TMP[i].setZero();

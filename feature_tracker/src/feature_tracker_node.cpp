@@ -18,13 +18,13 @@ queue<sensor_msgs::ImageConstPtr> img_buf;
 ros::Publisher pub_img,pub_match;
 ros::Publisher pub_restart;
 
-//每个相机都有一个FeatureTracker实例，即trackerData[i]
+// 每个相机都有一个FeatureTracker实例，即trackerData[i]
 FeatureTracker trackerData[NUM_OF_CAM];
 
 double first_image_time;
 int pub_count = 1;
 bool first_image_flag = true;
-double last_image_time = 0;//上一帧相机的时间戳
+double last_image_time = 0; // 上一帧相机的时间戳
 bool init_pub = 0;
 
 /**
@@ -37,7 +37,7 @@ bool init_pub = 0;
 */
 void img_callback(const sensor_msgs::ImageConstPtr &img_msg)
 {
-    //判断是否是第一帧
+    // 判断是否是第一帧
     if(first_image_flag)
     {
         first_image_flag = false;
@@ -78,7 +78,7 @@ void img_callback(const sensor_msgs::ImageConstPtr &img_msg)
 
     cv_bridge::CvImageConstPtr ptr;
 
-    //将图像编码8UC1转换为mono8
+    // 将图像编码8UC1转换为mono8
     if (img_msg->encoding == "8UC1")
     {
         sensor_msgs::Image img;
@@ -101,14 +101,14 @@ void img_callback(const sensor_msgs::ImageConstPtr &img_msg)
     for (int i = 0; i < NUM_OF_CAM; i++)
     {
         ROS_DEBUG("processing camera %d", i);
-        if (i != 1 || !STEREO_TRACK)//单目
-            //readImage()函数读取图像数据进行处理
+        if (i != 1 || !STEREO_TRACK) // 单目
+            // readImage()函数读取图像数据进行处理
             trackerData[i].readImage(ptr->image.rowRange(ROW * i, ROW * (i + 1)), img_msg->header.stamp.toSec());
-        else//双目
+        else // 双目
         {
             if (EQUALIZE)
             {
-                //自适应直方图均衡化处理
+                // 自适应直方图均衡化处理
                 cv::Ptr<cv::CLAHE> clahe = cv::createCLAHE();
                 clahe->apply(ptr->image.rowRange(ROW * i, ROW * (i + 1)), trackerData[i].cur_img);
             }
@@ -121,7 +121,7 @@ void img_callback(const sensor_msgs::ImageConstPtr &img_msg)
 #endif
     }
 
-    //更新全局ID
+    // 更新全局ID
     for (unsigned int i = 0;; i++)
     {
         bool completed = false;
@@ -132,9 +132,9 @@ void img_callback(const sensor_msgs::ImageConstPtr &img_msg)
             break;
     }
 
-    //1、将特征点id，矫正后归一化平面的3D点(x,y,z=1)，像素2D点(u,v)，像素的速度(vx,vy)，
-    //封装成sensor_msgs::PointCloudPtr类型的feature_points实例中,发布到pub_img;
-    //2、将图像封装到cv_bridge::cvtColor类型的ptr实例中发布到pub_match
+    // 1、将特征点id，矫正后归一化平面的3D点(x,y,z=1)，像素2D点(u,v)，像素的速度(vx,vy)，
+    // 封装成sensor_msgs::PointCloudPtr类型的feature_points实例中,发布到pub_img;
+    // 2、将图像封装到cv_bridge::cvtColor类型的ptr实例中发布到pub_match
    if (PUB_THIS_FRAME)
    {
         pub_count++;
@@ -150,10 +150,13 @@ void img_callback(const sensor_msgs::ImageConstPtr &img_msg)
 
         vector<set<int>> hash_ids(NUM_OF_CAM);
         for (int i = 0; i < NUM_OF_CAM; i++)
-        {
+        {   // 去畸变后的归一化坐标
             auto &un_pts = trackerData[i].cur_un_pts;
+            // 像素坐标
             auto &cur_pts = trackerData[i].cur_pts;
+            // 特征点的id
             auto &ids = trackerData[i].ids;
+            // 归一化平面的速度
             auto &pts_velocity = trackerData[i].pts_velocity;
             for (unsigned int j = 0; j < ids.size(); j++)
             {
@@ -200,7 +203,8 @@ void img_callback(const sensor_msgs::ImageConstPtr &img_msg)
             {
                 cv::Mat tmp_img = stereo_img.rowRange(i * ROW, (i + 1) * ROW);
                 cv::cvtColor(show_img, tmp_img, CV_GRAY2RGB);
-                //显示追踪状态，越红越好，越蓝越不行
+                // 显示追踪状态，越红越好，越蓝越不行
+                // 特征点被跟踪次数越多越红，越少越蓝
                 for (unsigned int j = 0; j < trackerData[i].cur_pts.size(); j++)
                 {
                     double len = std::min(1.0, 1.0 * trackerData[i].track_cnt[j] / WINDOW_SIZE);
@@ -231,21 +235,21 @@ void img_callback(const sensor_msgs::ImageConstPtr &img_msg)
 
 int main(int argc, char **argv)
 {
-    //ros初始化和设置句柄
+    // ros初始化和设置句柄
     ros::init(argc, argv, "feature_tracker");
     ros::NodeHandle n("~");
 
-    //设置logger的级别。 只有级别大于或等于level的日志记录消息才会得到处理。
+    // 设置logger的级别。 只有级别大于或等于level的日志记录消息才会得到处理。
     ros::console::set_logger_level(ROSCONSOLE_DEFAULT_NAME, ros::console::levels::Info);
     
-    //读取yaml中的一些配置参数
+    // 读取yaml中的一些配置参数
     readParameters(n);
 
-    //读取每个相机实例对应的相机内参
+    // 读取每个相机实例对应的相机内参
     for (int i = 0; i < NUM_OF_CAM; i++) 
         trackerData[i].readIntrinsicParameter(CAM_NAMES[i]);
 
-    //判断是否加入鱼眼mask来去除边缘噪声
+    // 判断是否加入鱼眼mask来去除边缘噪声
     if(FISHEYE)
     {
         for (int i = 0; i < NUM_OF_CAM; i++)
@@ -261,14 +265,14 @@ int main(int argc, char **argv)
         }
     }
 
-    //订阅话题IMAGE_TOPIC(/cam0/image_raw),执行回调函数img_callback
+    // 订阅话题IMAGE_TOPIC(/cam0/image_raw),执行回调函数img_callback
     ros::Subscriber sub_img = n.subscribe(IMAGE_TOPIC, 100, img_callback);
 
-    //发布feature，实例feature_points，跟踪的特征点，给后端优化用
+    // 发布feature，实例feature_points，跟踪的特征点，给后端优化用
     pub_img = n.advertise<sensor_msgs::PointCloud>("feature", 1000);
-    //发布feature_img，实例ptr，跟踪的特征点图，给RVIZ用和调试用
+    // 发布feature_img，实例ptr，跟踪的特征点图，给RVIZ用和调试用
     pub_match = n.advertise<sensor_msgs::Image>("feature_img",1000);
-    //发布restart
+    // 发布restart
     pub_restart = n.advertise<std_msgs::Bool>("restart",1000);
     /*
     if (SHOW_TRACK)

@@ -135,7 +135,7 @@ void BriefExtractor::operator() (const cv::Mat &im, vector<cv::KeyPoint> &keys, 
   m_brief.compute(im, keys, descriptors);
 }
 
-//关键帧中某个特征点的描述子与回环帧的所有描述子匹配
+// 关键帧中某个特征点的描述子与回环帧的所有描述子匹配
 bool KeyFrame::searchInAera(const BRIEF::bitset window_descriptor,
                             const std::vector<BRIEF::bitset> &descriptors_old,
                             const std::vector<cv::KeyPoint> &keypoints_old,
@@ -158,7 +158,7 @@ bool KeyFrame::searchInAera(const BRIEF::bitset window_descriptor,
         }
     }
     //printf("best dist %d", bestDist);
-    //找到汉明距离小于80的最小值和索引即为该特征点的最佳匹配
+    // 找到汉明距离小于80的最小值和索引即为该特征点的最佳匹配
     if (bestIndex != -1 && bestDist < 80)
     {
       best_match = keypoints_old[bestIndex].pt;
@@ -190,6 +190,7 @@ void KeyFrame::searchByBRIEFDes(std::vector<cv::Point2f> &matched_2d_old,
     {
         cv::Point2f pt(0.f, 0.f);
         cv::Point2f pt_norm(0.f, 0.f);
+		// 描述子匹配需要加速？
         if (searchInAera(window_brief_descriptors[i], descriptors_old, keypoints_old, keypoints_old_norm, pt, pt_norm))
           status.push_back(1);
         else
@@ -227,7 +228,7 @@ void KeyFrame::FundmantalMatrixRANSAC(const std::vector<cv::Point2f> &matched_2d
     }
 }
 
-//通过RANSAC的PNP检验去除匹配异常的点
+// 通过RANSAC的PNP检验去除匹配异常的点
 void KeyFrame::PnPRANSAC(const vector<cv::Point2f> &matched_2d_old_norm,
                          const std::vector<cv::Point3f> &matched_3d,
                          std::vector<uchar> &status,
@@ -280,13 +281,13 @@ void KeyFrame::PnPRANSAC(const vector<cv::Point2f> &matched_2d_old_norm,
     Vector3d T_pnp, T_w_c_old;
     cv::cv2eigen(t, T_pnp);
     T_w_c_old = R_w_c_old * (-T_pnp);
-
+    // 通过PNP算出的当前帧的位姿
     PnP_R_old = R_w_c_old * qic.transpose();
     PnP_T_old = T_w_c_old - PnP_R_old * tic;
 
 }
 
-//寻找并建立关键帧与回环帧之间的匹配关系
+// 寻找并建立关键帧与回环帧之间的匹配关系
 bool KeyFrame::findConnection(KeyFrame* old_kf)
 {
 	TicToc tmp_t;
@@ -329,7 +330,7 @@ bool KeyFrame::findConnection(KeyFrame* old_kf)
 	    }
 	#endif
 	//printf("search by des\n");
-	//关键帧与回环帧进行BRIEF描述子匹配，剔除匹配失败的点
+	// 关键帧与回环帧进行BRIEF描述子匹配，剔除匹配失败的点
 	searchByBRIEFDes(matched_2d_old, matched_2d_old_norm, status, old_kf->brief_descriptors, old_kf->keypoints, old_kf->keypoints_norm);
 	reduceVector(matched_2d_cur, status);
 	reduceVector(matched_2d_old, status);
@@ -436,7 +437,7 @@ bool KeyFrame::findConnection(KeyFrame* old_kf)
 	Quaterniond relative_q;
 	double relative_yaw;
 
-	//若达到最小回环匹配点数
+	// 若达到最小回环匹配点数
 	if ((int)matched_2d_cur.size() > MIN_LOOP_NUM)
 	{
 		//RANSAC PnP检测去除误匹配的点
@@ -462,14 +463,13 @@ bool KeyFrame::findConnection(KeyFrame* old_kf)
 				 *	OutputArray dst 	输出矩阵，行数与前两个矩阵相同，列数为他们的总和
 				 *	)	
 	            */
-	            //这里将image、gap_image、old_img水平拼接起来成为gray_img
+	            // 这里将image、gap_image、old_img水平拼接起来成为gray_img
 	            cv::hconcat(image, gap_image, gap_image);
-	            cv::hconcat(gap_image, old_img, gray_img);
-
-	            //灰度图gray_img转换成RGB图loop_match_img
+                cv::hconcat(gap_image, old_img, gray_img);
+				// 灰度图gray_img转换成RGB图loop_match_img
 	            cvtColor(gray_img, loop_match_img, CV_GRAY2RGB);
 
-	            //在图片loop_match_img上标注出匹配点和之间的连线
+	            // 在图片loop_match_img上标注出匹配点和之间的连线
 	            for(int i = 0; i< (int)matched_2d_cur.size(); i++)
 	            {
 	                cv::Point2f cur_pt = matched_2d_cur[i];
@@ -488,7 +488,7 @@ bool KeyFrame::findConnection(KeyFrame* old_kf)
 	                cv::line(loop_match_img, matched_2d_cur[i], old_pt, cv::Scalar(0, 255, 0), 2, 8, 0);
 	            }
 
-	            //在loop_match_img下面垂直拼接一个notation，写上当前帧和先前帧的索引值和序列号
+	            // 在loop_match_img下面垂直拼接一个notation，写上当前帧和先前帧的索引值和序列号
 	            cv::Mat notation(50, COL + gap + COL, CV_8UC3, cv::Scalar(255, 255, 255));
 	            putText(notation, "current frame: " + to_string(index) + "  sequence: " + to_string(sequence), cv::Point2f(20, 30), CV_FONT_HERSHEY_SIMPLEX, 1, cv::Scalar(255), 3);
 	            putText(notation, "previous frame: " + to_string(old_kf->index) + "  sequence: " + to_string(old_kf->sequence), cv::Point2f(20 + COL + gap, 30), CV_FONT_HERSHEY_SIMPLEX, 1, cv::Scalar(255), 3);
@@ -501,7 +501,7 @@ bool KeyFrame::findConnection(KeyFrame* old_kf)
 	                    << old_kf->index << "-" << "3pnp_match.jpg";
 	            cv::imwrite( path.str().c_str(), loop_match_img);
 	            */
-	            //若达到最小回环匹配点数，将loop_match_img的宽和高缩小一半并发布为pub_match_img
+	            // 若达到最小回环 匹配点数，将loop_match_img的宽和高缩小一半并发布为pub_match_img
 	            if ((int)matched_2d_cur.size() > MIN_LOOP_NUM)
 	            {
 	            	/*
@@ -518,17 +518,18 @@ bool KeyFrame::findConnection(KeyFrame* old_kf)
 	    #endif
 	}
 
-	//若达到最小回环匹配点数
+	// 若达到最小回环匹配点数
 	if ((int)matched_2d_cur.size() > MIN_LOOP_NUM)
 	{
 	    relative_t = PnP_R_old.transpose() * (origin_vio_T - PnP_T_old);
 	    relative_q = PnP_R_old.transpose() * origin_vio_R;
+		// Utility::R2ypr: 由旋转矩阵转到欧拉角
 	    relative_yaw = Utility::normalizeAngle(Utility::R2ypr(origin_vio_R).x() - Utility::R2ypr(PnP_R_old).x());
 	    //printf("PNP relative\n");
 	    //cout << "pnp relative_t " << relative_t.transpose() << endl;
 	    //cout << "pnp relative_yaw " << relative_yaw << endl;
 	    
-	    //相对位姿检验
+	    // 相对位姿检验，回环帧和当前帧yaw小于30度，平移小于20米
 	    if (abs(relative_yaw) < 30.0 && relative_t.norm() < 20.0)
 	    {
 
@@ -538,7 +539,7 @@ bool KeyFrame::findConnection(KeyFrame* old_kf)
 	    	             relative_q.w(), relative_q.x(), relative_q.y(), relative_q.z(),
 	    	             relative_yaw;
 
-	    	//快速重定位
+	    	// 快速重定位
 	    	if(FAST_RELOCALIZATION)
 	    	{
 			    sensor_msgs::PointCloud msg_match_points;
@@ -574,7 +575,7 @@ bool KeyFrame::findConnection(KeyFrame* old_kf)
 }
 
 
-//计算两个描述子之间的汉明距离
+// 计算两个描述子之间的汉明距离
 int KeyFrame::HammingDis(const BRIEF::bitset &a, const BRIEF::bitset &b)
 {
     BRIEF::bitset xor_of_bitset = a ^ b;
@@ -633,7 +634,7 @@ void KeyFrame::updateLoop(Eigen::Matrix<double, 8, 1 > &_loop_info)
 }
 
 
-//读取 构建字典时使用的相同的Brief模板文件，构造BriefExtractor
+// 读取 构建字典时使用的相同的Brief模板文件，构造BriefExtractor
 BriefExtractor::BriefExtractor(const std::string &pattern_file)
 {
   // The DVision::BRIEF extractor computes a random pattern by default when
